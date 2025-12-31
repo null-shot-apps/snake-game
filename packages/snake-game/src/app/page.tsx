@@ -1,84 +1,226 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 
-const slogans = [
-  "Turn chats into apps",
-  "Prompt. Ship. Repeat.",
-  "Build anything from a chat",
-  "Ideas → Apps, instantly",
-  "From zero to MVP in minutes",
-  "Your cofounder in the command line",
-  "Draft, iterate, deploy",
-  "Ship faster than you can type",
-  "Design in text, deliver in code",
-  "Dream it. Prompt it. Run it.",
-  "Chat-native app building",
-  "From prompt to product",
-  "One prompt, infinite apps",
-  "Stop scaffolding. Start shipping.",
-  "Prototype at the speed of thought",
-  "Make conversations executable"
-];
+type Position = { x: number; y: number };
+type Direction = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT';
+type FoodType = 'cap' | 'snowman';
 
-export default function Landing() {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isVisible, setIsVisible] = useState(true);
+interface Food {
+  position: Position;
+  type: FoodType;
+}
+
+const GRID_SIZE = 20;
+const CELL_SIZE = 20;
+const INITIAL_SNAKE = [{ x: 10, y: 10 }];
+const INITIAL_DIRECTION: Direction = 'RIGHT';
+const GAME_SPEED = 150;
+
+export default function SnakeGame() {
+  const [snake, setSnake] = useState<Position[]>(INITIAL_SNAKE);
+  const [direction, setDirection] = useState<Direction>(INITIAL_DIRECTION);
+  const [food, setFood] = useState<Food | null>(null);
+  const [score, setScore] = useState(0);
+  const [gameOver, setGameOver] = useState(false);
+  const [gameStarted, setGameStarted] = useState(false);
+
+  const generateFood = useCallback((): Food => {
+    const type: FoodType = Math.random() > 0.7 ? 'snowman' : 'cap';
+    let newFood: Position;
+    
+    do {
+      newFood = {
+        x: Math.floor(Math.random() * GRID_SIZE),
+        y: Math.floor(Math.random() * GRID_SIZE),
+      };
+    } while (snake.some(segment => segment.x === newFood.x && segment.y === newFood.y));
+    
+    return { position: newFood, type };
+  }, [snake]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setIsVisible(false);
-      setTimeout(() => {
-        setCurrentIndex((prev) => (prev + 1) % slogans.length);
-        setIsVisible(true);
-      }, 400);
-    }, 2800);
+    if (!food) {
+      setFood(generateFood());
+    }
+  }, [food, generateFood]);
 
+  const moveSnake = useCallback(() => {
+    if (!gameStarted || gameOver) return;
+
+    setSnake(prevSnake => {
+      const head = prevSnake[0];
+      let newHead: Position;
+
+      switch (direction) {
+        case 'UP':
+          newHead = { x: head.x, y: head.y - 1 };
+          break;
+        case 'DOWN':
+          newHead = { x: head.x, y: head.y + 1 };
+          break;
+        case 'LEFT':
+          newHead = { x: head.x - 1, y: head.y };
+          break;
+        case 'RIGHT':
+          newHead = { x: head.x + 1, y: head.y };
+          break;
+      }
+
+      // Check wall collision
+      if (newHead.x < 0 || newHead.x >= GRID_SIZE || newHead.y < 0 || newHead.y >= GRID_SIZE) {
+        setGameOver(true);
+        return prevSnake;
+      }
+
+      // Check self collision
+      if (prevSnake.some(segment => segment.x === newHead.x && segment.y === newHead.y)) {
+        setGameOver(true);
+        return prevSnake;
+      }
+
+      const newSnake = [newHead, ...prevSnake];
+
+      // Check food collision
+      if (food && newHead.x === food.position.x && newHead.y === food.position.y) {
+        const points = food.type === 'snowman' ? 10 : 5;
+        const growth = food.type === 'snowman' ? 2 : 1;
+        
+        setScore(prev => prev + points);
+        setFood(null);
+        
+        // Add extra segments for growth
+        for (let i = 1; i < growth; i++) {
+          newSnake.push(prevSnake[prevSnake.length - 1]);
+        }
+        
+        return newSnake;
+      }
+
+      // Remove tail if no food eaten
+      newSnake.pop();
+      return newSnake;
+    });
+  }, [direction, food, gameOver, gameStarted]);
+
+  useEffect(() => {
+    const interval = setInterval(moveSnake, GAME_SPEED);
     return () => clearInterval(interval);
-  }, []);
+  }, [moveSnake]);
+
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (!gameStarted && !gameOver) {
+        setGameStarted(true);
+      }
+
+      switch (e.key) {
+        case 'ArrowUp':
+          e.preventDefault();
+          setDirection(prev => prev !== 'DOWN' ? 'UP' : prev);
+          break;
+        case 'ArrowDown':
+          e.preventDefault();
+          setDirection(prev => prev !== 'UP' ? 'DOWN' : prev);
+          break;
+        case 'ArrowLeft':
+          e.preventDefault();
+          setDirection(prev => prev !== 'RIGHT' ? 'LEFT' : prev);
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          setDirection(prev => prev !== 'LEFT' ? 'RIGHT' : prev);
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [gameStarted, gameOver]);
+
+  const resetGame = () => {
+    setSnake(INITIAL_SNAKE);
+    setDirection(INITIAL_DIRECTION);
+    setFood(null);
+    setScore(0);
+    setGameOver(false);
+    setGameStarted(false);
+  };
 
   return (
-    <div className="relative h-[100dvh] w-full overflow-hidden bg-black text-white">
-      {/* Enhanced animated aurora background layers */}
-      <div className="absolute inset-0 bg-aurora-layer-1" />
-      <div className="absolute inset-0 bg-aurora-layer-2" />
-      <div className="absolute inset-0 bg-aurora-layer-3" />
-      
-      {/* Floating particles overlay */}
-      <div className="absolute inset-0 bg-particles" />
-      
-      {/* Main content - centered */}
-      <main className="relative z-10 h-full flex flex-col items-center justify-center px-6">
-        <h1 className="text-center text-[clamp(28px,6vw,64px)] font-medium tracking-tight mb-4">
-          Turn Chats into Apps
-        </h1>
-        
-        {/* Rotating slogans */}
-        <div className="mt-4 h-8 md:h-10 overflow-hidden flex items-center justify-center">
-          <span
-            className={`inline-block text-center text-[clamp(18px,3vw,32px)] font-light transition-all duration-[400ms] ease-in-out ${
-              isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'
-            }`}
-          >
-            {slogans[currentIndex]}
-          </span>
+    <div className="min-h-screen bg-gradient-to-b from-blue-900 via-blue-800 to-blue-900 flex flex-col items-center justify-center p-4">
+      <div className="text-center mb-6">
+        <h1 className="text-5xl font-bold text-white mb-2">🎄 Christmas Snake 🎄</h1>
+        <div className="text-2xl text-white font-semibold">Score: {score}</div>
+        <div className="text-sm text-blue-200 mt-2">
+          🎅 Christmas Cap = 5 points | ⛄ Snowman = 10 points
         </div>
-      </main>
-      
-      {/* Start Prompting arrow pointing left - bottom left */}
-      <div className="absolute left-6 md:left-8 bottom-[5%] z-20 flex items-center gap-3 arrow-point-left">
-        <div className="flex items-center gap-2 text-white/80 font-medium text-sm md:text-base">
-          <svg 
-            className="w-5 h-5 md:w-6 md:h-6 animate-bounce-horizontal" 
-            fill="none" 
-            viewBox="0 0 24 24" 
-            stroke="currentColor"
+      </div>
+
+      <div 
+        className="relative bg-white/10 backdrop-blur-sm rounded-lg shadow-2xl border-4 border-white/20"
+        style={{ 
+          width: GRID_SIZE * CELL_SIZE, 
+          height: GRID_SIZE * CELL_SIZE 
+        }}
+      >
+        {/* Snake */}
+        {snake.map((segment, index) => (
+          <div
+            key={index}
+            className={`absolute ${index === 0 ? 'bg-green-400' : 'bg-green-500'} rounded-sm border border-green-600`}
+            style={{
+              left: segment.x * CELL_SIZE,
+              top: segment.y * CELL_SIZE,
+              width: CELL_SIZE,
+              height: CELL_SIZE,
+            }}
+          />
+        ))}
+
+        {/* Food */}
+        {food && (
+          <div
+            className="absolute flex items-center justify-center text-2xl"
+            style={{
+              left: food.position.x * CELL_SIZE,
+              top: food.position.y * CELL_SIZE,
+              width: CELL_SIZE,
+              height: CELL_SIZE,
+            }}
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          <span>Start prompting</span>
-        </div>
+            {food.type === 'cap' ? '🎅' : '⛄'}
+          </div>
+        )}
+
+        {/* Game Over Overlay */}
+        {gameOver && (
+          <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center rounded-lg">
+            <div className="text-white text-4xl font-bold mb-4">Game Over!</div>
+            <div className="text-white text-2xl mb-6">Final Score: {score}</div>
+            <button
+              onClick={resetGame}
+              className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors"
+            >
+              Play Again
+            </button>
+          </div>
+        )}
+
+        {/* Start Screen */}
+        {!gameStarted && !gameOver && (
+          <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-lg">
+            <div className="text-white text-xl font-semibold animate-pulse">
+              Press any arrow key to start
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-6 text-center text-white/80 text-sm">
+        Use arrow keys to control the snake
       </div>
     </div>
   );
 }
+
